@@ -1,424 +1,1790 @@
-```html
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Web Novel Viewer - Fixed UI</title>
-    <link href="https://fonts.googleapis.com/css2?family=Nanum+Myeongjo:wght@400;700&display=swap" rel="stylesheet">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        body {
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-            text-rendering: optimizeLegibility;
-        }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 한자 암기 도우미</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght=300;400;700;900&family=Nanum+Pen+Script&display=swap');
+    
+    body {
+      font-family: 'Noto Serif KR', serif;
+    }
 
-        .font-gulim { font-family: 'Gulim', 'Dotum', sans-serif !important; }
-        .font-batang { font-family: 'Batang', 'AppleMyungjo', serif !important; }
-        .font-myungjo { font-family: 'Nanum Myeongjo', serif !important; }
+    /* 전통 한지 질감 효과를 극대화하는 배경 설정 */
+    .paper-texture {
+      background-color: #faf6eb;
+      background-image: 
+        radial-gradient(circle at 50% 50%, rgba(245, 235, 215, 0.5) 0%, rgba(250, 246, 235, 0.2) 100%),
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.045'/%3E%3C/svg%3E");
+    }
 
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.4); border-radius: 10px; }
+    /* 전통적인 이중 서당 테두리 라인 */
+    .traditional-border {
+      border: 8px double #6b5d48;
+    }
 
-        body { transition: background-color 0.2s, color 0.2s; overflow-x: hidden; scroll-behavior: smooth; }
-        #content { white-space: pre-wrap; line-height: 2.1; word-break: break-all; }
-        
-        .panel-transition { transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); }
-        .hidden-panel-bottom { transform: translateY(100%); }
-        .hidden-panel-right { transform: translateX(100%); }
-        
-        .ui-element { transition: opacity 0.3s ease, transform 0.3s ease; }
-        .ui-hidden { opacity: 0; pointer-events: none; transform: translateY(-10px); }
-        .ui-hidden-bottom { opacity: 0; pointer-events: none; transform: translate(-50%, 20px); }
-        .ui-hidden-right { opacity: 0; pointer-events: none; transform: scale(0.8); }
+    /* 한자 폰트를 깊고 선명한 붓글씨 느낌으로 강조 */
+    .hanja-text {
+      font-family: 'Noto Serif KR', serif;
+      font-weight: 700;
+    }
 
-        /* 설정창 및 목차 글자색 강제 고정 (보스 요청사항: 배경은 하양, 글자는 검정) */
-        #settings-panel, #toc-panel {
-            background-color: white !important;
-            color: #111827 !important; /* gray-900 */
-        }
-        #settings-panel *, #toc-panel * {
-            color: #111827 !important;
-        }
-        /* 다크모드에서도 설정 버튼 내부 글자는 보여야 함 */
-        #settings-panel select, #settings-panel button#close-settings {
-            background-color: #f3f4f6 !important; /* gray-100 */
-        }
-        .chapter-item {
-            border-color: #f3f4f6 !important;
-        }
-        .chapter-item:hover {
-            background-color: #eff6ff !important; /* blue-50 */
-        }
-
-        .nav-btn { @apply px-6 py-2.5 bg-gray-100 rounded-full hover:bg-blue-600 hover:text-white transition-all disabled:opacity-30 font-bold shadow-sm text-gray-900; }
-        
-        #touch-center { position: fixed; top: 20%; left: 15%; width: 70%; height: 60%; z-index: 5; }
-
-        #scroll-hint {
-            position: fixed;
-            left: 50%;
-            transform: translateX(-50%);
-            padding: 10px 20px;
-            background: rgba(0, 0, 0, 0.85);
-            color: #fff;
-            border-radius: 24px;
-            font-size: 13px;
-            font-weight: 700;
-            z-index: 100;
-            opacity: 0;
-            transition: opacity 0.3s;
-            pointer-events: none;
-        }
-
-        /* 본문 텍스트만 다크모드 적용 */
-        .dark #content { color: #e5e7eb; }
-        .dark #viewer-placeholder { color: #4b5563; }
-    </style>
+    /* 터치 스와이프를 위한 드래그 효과 트랜지션 */
+    .swipe-card {
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s;
+      touch-action: none;
+    }
+  </style>
 </head>
-<body class="bg-white text-gray-900 min-h-screen flex flex-col items-center">
+<body class="paper-texture min-h-screen text-stone-800 flex flex-col justify-between">
 
-    <div id="scroll-hint">다음 회차로 넘어가려면 더 당기세요</div>
+  <!-- 상단 네비게이션 헤더 (종이 톤에 맞춘 차분한 테두리) -->
+  <header class="border-b border-stone-300 py-4 px-6 flex justify-between items-center bg-stone-100/80 backdrop-blur-sm sticky top-0 z-50">
+    <div class="flex items-center space-x-2">
+      <span class="text-2xl font-black tracking-widest text-indigo-950 border-2 border-indigo-950 px-2 py-0.5 rounded bg-white/50">溫故知新</span>
+      <h1 class="text-xl font-bold hidden sm:inline text-stone-800">온고지신 한자 앱</h1>
+    </div>
+    <div class="flex items-center space-x-3">
+      <button onclick="openSettings()" class="p-2 hover:bg-stone-200 rounded-full transition text-stone-700" title="API 설정">
+        <i data-lucide="key" class="w-5 h-5"></i>
+      </button>
+      <button onclick="switchTab('favorites')" class="p-2 hover:bg-stone-200 rounded-full transition relative text-indigo-800" title="즐겨찾기">
+        <i data-lucide="star" class="w-5 h-5 fill-indigo-800 text-indigo-800"></i>
+      </button>
+    </div>
+  </header>
 
-    <header id="header" class="ui-element w-full max-w-3xl p-4 flex justify-between items-center sticky top-0 z-40 border-b backdrop-blur-md bg-white/80 dark:bg-zinc-950/90 dark:border-zinc-800">
-        <div class="flex items-center gap-3">
-            <button id="open-toc" class="p-2.5 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-full transition-colors hidden">
-                <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
-            </button>
-            <span id="chapter-indicator" class="text-sm font-bold bg-gray-100 text-gray-700 px-3 py-1 rounded-full dark:bg-zinc-800 dark:text-zinc-300 hidden truncate max-w-[200px]"></span>
-        </div>
-        <label class="cursor-pointer bg-black text-white px-5 py-2 rounded-full hover:opacity-80 transition-all text-sm font-bold">
-            파일 열기
-            <input type="file" id="file-input" class="hidden" accept=".txt">
-        </label>
-    </header>
+  <!-- 메인 콘텐츠 영역 -->
+  <main class="flex-grow max-w-4xl w-full mx-auto p-4 pb-24">
 
-    <div id="touch-center"></div>
-
-    <main class="w-full max-w-3xl px-6 py-12 flex-grow">
-        <div id="viewer-placeholder" class="flex flex-col items-center justify-center min-h-[60vh] text-center text-gray-400">
-            <p class="text-xl font-bold">파일을 업로드해주세요</p>
-        </div>
-
-        <div id="viewer-container" class="hidden">
-            <div id="content" class="content-area font-batang mb-20 text-lg text-gray-900"></div>
-            
-            <div id="bottom-nav" class="ui-element fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-3xl px-6 py-8 bg-gradient-to-t from-white via-white/95 to-transparent dark:from-zinc-950 dark:via-zinc-950/95 pointer-events-none z-20">
-                <div class="flex justify-between items-center pointer-events-auto">
-                    <button id="prev-btn" class="nav-btn">이전화</button>
-                    <div class="bg-zinc-900 text-white px-5 py-2 rounded-full text-xs font-bold shadow-lg">
-                        <span id="page-info">0 / 0</span>
-                    </div>
-                    <button id="next-btn" class="nav-btn">다음화</button>
-                </div>
-            </div>
-        </div>
-    </main>
-
-    <button id="toggle-settings" class="ui-element fixed bottom-24 right-6 w-14 h-14 bg-white text-gray-800 rounded-2xl shadow-xl flex items-center justify-center z-40 border border-gray-100">
-        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-    </button>
-
-    <div id="overlay" class="fixed inset-0 bg-black/50 backdrop-blur-sm z-45 hidden transition-opacity duration-300"></div>
-
-    <div id="toc-panel" class="fixed top-0 right-0 h-full w-full sm:w-[400px] shadow-2xl z-50 panel-transition hidden-panel-right border-l border-gray-100 flex flex-col">
-        <div class="p-6 border-b border-gray-100 flex justify-between items-center">
-            <h2 class="font-black text-xl tracking-tighter uppercase">목차</h2>
-            <button id="close-toc" class="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-400">
-                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-            </button>
-        </div>
-        <div id="chapter-list" class="flex-grow overflow-y-auto pb-10"></div>
+    <!-- API 키 등록 경고창 (미등록시 - 저채도 파스텔 쪽빛 스타일로 차분하게 경고) -->
+    <div id="apiKeyNotice" class="hidden mb-6 p-4 border border-indigo-200 bg-indigo-50/70 text-indigo-900 rounded-xl flex items-center justify-between">
+      <div class="flex items-center space-x-2.5">
+        <i data-lucide="info" class="w-5 h-5 flex-shrink-0 text-indigo-700"></i>
+        <span class="text-sm font-medium"><strong>API 키가 비어 있습니다.</strong> 지능형 한자 카메라 인식과 AI 오답 비서 기능을 활성화하려면 설정에서 키를 보완해 주세요.</span>
+      </div>
+      <button onclick="openSettings()" class="bg-indigo-900 text-white px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-indigo-950 transition">입력하기</button>
     </div>
 
-    <div id="settings-panel" class="fixed bottom-0 left-0 w-full border-t border-gray-200 p-8 z-50 panel-transition hidden-panel-bottom shadow-2xl rounded-t-[32px] flex flex-col items-center">
-        <div class="w-full max-w-md space-y-8">
-            <h2 class="text-xl font-black tracking-tight uppercase">설정</h2>
-            <div class="space-y-6">
-                <div class="flex justify-between items-center">
-                    <span class="text-sm font-bold text-gray-500 uppercase">테마</span>
-                    <div class="flex gap-2 p-1 bg-gray-100 rounded-xl">
-                        <button id="btn-light" class="px-5 py-2 rounded-lg text-sm font-bold transition-all">라이트</button>
-                        <button id="btn-dark" class="px-5 py-2 rounded-lg text-sm font-bold transition-all">다크</button>
-                    </div>
-                </div>
-                <div class="flex justify-between items-center">
-                    <span class="text-sm font-bold text-gray-500 uppercase">글꼴</span>
-                    <select id="font-family-select" class="bg-gray-100 rounded-xl px-4 py-2.5 text-sm font-bold">
-                        <option value="font-gulim">굴림체</option>
-                        <option value="font-batang">바탕체</option>
-                        <option value="font-myungjo">명조체</option>
-                    </select>
-                </div>
-                <div class="space-y-4">
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm font-bold text-gray-500 uppercase">크기</span>
-                        <span id="font-size-val" class="text-sm font-mono font-bold text-blue-600">18px</span>
-                    </div>
-                    <input type="range" id="font-size-slider" min="14" max="40" value="18" class="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600">
-                </div>
-            </div>
-            <button id="close-settings" class="w-full py-4 bg-gray-100 rounded-2xl font-bold uppercase tracking-widest text-xs">닫기</button>
+    <!-- 탭 네비게이션 컨테이너 -->
+    <div id="tab-home" class="tab-content space-y-6">
+      
+      <!-- 대시보드 요약 (저채도 쪽빛 포인트 & 종이의 정갈한 조화) -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <!-- 요약 카드 1: 전체 폴더 수 -->
+        <div class="bg-white/90 p-5 rounded-xl border border-stone-200 shadow-sm flex items-center space-x-4">
+          <div class="p-3 bg-stone-100 rounded-full text-indigo-950">
+            <i data-lucide="folder-open" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="text-xs text-stone-500">전체 묶음(폴더)</div>
+            <div class="text-2xl font-black text-indigo-950" id="stat-folders-count">0개</div>
+          </div>
         </div>
+        <!-- 요약 카드 2: 총 한자 수 -->
+        <div class="bg-white/90 p-5 rounded-xl border border-stone-200 shadow-sm flex items-center space-x-4">
+          <div class="p-3 bg-indigo-50 rounded-full text-indigo-800">
+            <i data-lucide="layers" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="text-xs text-stone-500">총 한자 카드 수</div>
+            <div class="text-2xl font-black text-indigo-950" id="stat-cards-count">0개</div>
+          </div>
+        </div>
+        <!-- 요약 카드 3: 암기 성공률 (가장 높은 채도로 강조) -->
+        <div class="bg-indigo-950 text-white p-5 rounded-xl border border-indigo-900 shadow-sm flex items-center space-x-4">
+          <div class="p-3 bg-white/15 rounded-full text-indigo-200">
+            <i data-lucide="trending-up" class="w-6 h-6"></i>
+          </div>
+          <div>
+            <div class="text-xs text-indigo-200">평균 암기 완독률</div>
+            <div class="text-2xl font-black" id="stat-mastery-rate">0%</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 핵심 메뉴 빠른 실행 (전통 기와/먹빛 톤에 쪽빛 버튼 변주) -->
+      <div class="bg-stone-900 text-stone-100 p-6 rounded-2xl shadow-lg relative overflow-hidden">
+        <div class="absolute right-0 bottom-0 opacity-5 pointer-events-none transform translate-y-6 translate-x-6">
+          <span class="hanja-text text-[11rem] text-white">溫</span>
+        </div>
+        <h2 class="text-2xl font-bold mb-2">무엇을 학습할까요?</h2>
+        <p class="text-stone-400 text-xs mb-6">스마트 사진 분석부터 전통 필기 학습까지 단일 톤의 격조 높은 디자인으로 공부를 시작하세요.</p>
+        
+        <div class="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <!-- 고채도 쪽빛: 사진 인식 -->
+          <button onclick="switchTab('recognition')" class="bg-indigo-900 hover:bg-indigo-800 text-white p-4 rounded-xl flex flex-col items-center justify-center space-y-2 transition shadow-sm">
+            <i data-lucide="camera" class="w-5 h-5 text-indigo-200"></i>
+            <span class="text-sm font-semibold">한문 촬영/인식</span>
+          </button>
+          <!-- 중고채도 쪽빛: 플래시카드 -->
+          <button onclick="startStudyPreparation('flashcard')" class="bg-indigo-700 hover:bg-indigo-650 text-white p-4 rounded-xl flex flex-col items-center justify-center space-y-2 transition shadow-sm">
+            <i data-lucide="credit-card" class="w-5 h-5 text-indigo-100"></i>
+            <span class="text-sm font-semibold">플래시카드</span>
+          </button>
+          <!-- 중채도 쪽빛: 한자 쓰기 -->
+          <button onclick="startStudyPreparation('writing')" class="bg-indigo-500 hover:bg-indigo-450 text-white p-4 rounded-xl flex flex-col items-center justify-center space-y-2 transition shadow-sm">
+            <i data-lucide="pen-tool" class="w-5 h-5 text-indigo-50"></i>
+            <span class="text-sm font-semibold">한자 쓰기 연습</span>
+          </button>
+          <!-- 저채도 회색빛: AI 분석 -->
+          <button onclick="switchTab('analytics')" class="bg-stone-800 hover:bg-stone-700 text-stone-100 p-4 rounded-xl border border-stone-700 flex flex-col items-center justify-center space-y-2 transition shadow-sm">
+            <i data-lucide="brain-circuit" class="w-5 h-5 text-indigo-400"></i>
+            <span class="text-sm font-semibold text-stone-200">AI 오답 분석</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 폴더(묶음) 리스트 섹션 -->
+      <div class="space-y-4">
+        <div class="flex justify-between items-center">
+          <h3 class="text-xl font-bold text-stone-900 flex items-center space-x-2">
+            <i data-lucide="folder" class="w-5 h-5 text-indigo-900"></i>
+            <span>내 한자 묶음 목록</span>
+          </h3>
+          <button onclick="openCreateFolderModal()" class="flex items-center space-x-1 text-xs bg-stone-200 hover:bg-stone-300 text-stone-900 px-3 py-2 rounded-lg font-bold transition border border-stone-300">
+            <i data-lucide="plus" class="w-4 h-4"></i>
+            <span>새 묶음 생성</span>
+          </button>
+        </div>
+
+        <div id="folder-list-container" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <!-- JS로 동적 생성 -->
+        </div>
+      </div>
     </div>
 
-    <script>
-        const dbName = "NovelViewerDB_FinalFix";
-        const storeName = "novelStore";
-        let db;
+    <!-- 기능 1: 한자 인식 탭 -->
+    <div id="tab-recognition" class="tab-content hidden space-y-6">
+      <div class="flex items-center space-x-2 mb-2">
+        <button onclick="switchTab('home')" class="p-1 hover:bg-stone-200 rounded-lg transition">
+          <i data-lucide="arrow-left" class="w-5 h-5 text-stone-700"></i>
+        </button>
+        <h2 class="text-2xl font-bold text-indigo-950">한문 인식 및 등록</h2>
+      </div>
 
-        const request = indexedDB.open(dbName, 1);
-        request.onupgradeneeded = (e) => { e.target.result.createObjectStore(storeName); };
-        request.onsuccess = (e) => { db = e.target.result; loadLastSession(); };
+      <!-- 방법선택 탭 (단일 쪽빛 보더 포인트 적용) -->
+      <div class="flex border-b border-stone-300">
+        <button onclick="toggleRecognitionMethod('ai')" id="btn-method-ai" class="flex-1 py-3 text-center border-b-2 border-indigo-950 font-black text-indigo-950">AI 이미지 분석 등록</button>
+        <button onclick="toggleRecognitionMethod('manual')" id="btn-method-manual" class="flex-1 py-3 text-center text-stone-500 hover:text-indigo-950 font-bold">수동 개별 등록</button>
+      </div>
 
-        const fileInput = document.getElementById('file-input');
-        const contentArea = document.getElementById('content');
-        const placeholder = document.getElementById('viewer-placeholder');
-        const viewerContainer = document.getElementById('viewer-container');
-        const chapterIndicator = document.getElementById('chapter-indicator');
-        const pageInfo = document.getElementById('page-info');
-        const touchCenter = document.getElementById('touch-center');
-        const scrollHint = document.getElementById('scroll-hint');
+      <!-- AI 이미지 업로드 섹션 -->
+      <div id="method-ai-container" class="space-y-6">
+        <div class="bg-white/90 p-6 rounded-xl border border-stone-200 space-y-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="block text-xs font-bold text-stone-700 mb-1.5">인식한 한자를 저장할 묶음(폴더) 선택</label>
+              <select id="ai-folder-select" class="w-full border border-stone-300 rounded-lg p-2.5 bg-stone-50/50 text-stone-800 font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+                <!-- 폴더 목록 채워짐 -->
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-stone-700 mb-1.5">새 묶음 이름으로 직접 지정하기 (선택)</label>
+              <input type="text" id="ai-new-folder-name" placeholder="예: 모의고사 1회 오답" class="w-full border border-stone-300 rounded-lg p-2.5 bg-stone-50/50 text-stone-800 placeholder-stone-400 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+            </div>
+          </div>
+
+          <!-- 이미지 촬영/업로드 영역 -->
+          <div class="border-2 border-dashed border-stone-300 rounded-xl p-8 text-center bg-stone-50/30 hover:bg-stone-50/70 transition cursor-pointer relative" id="drop-zone" onclick="triggerFileInput()">
+            <input type="file" id="file-input" accept="image/*" class="hidden" onchange="handleFileSelect(event)">
+            <div class="space-y-3" id="drop-zone-prompt">
+              <div class="flex justify-center">
+                <div class="p-4 bg-indigo-50 rounded-full text-indigo-950 border border-indigo-100">
+                  <i data-lucide="image-plus" class="w-8 h-8"></i>
+                </div>
+              </div>
+              <div class="text-stone-800 font-bold text-sm">한문 유인물 또는 문제지 사진 첨부</div>
+              <p class="text-stone-500 text-xs">터치하여 카메라를 구동하거나 사진을 업로드해 주세요.</p>
+            </div>
+            
+            <div id="image-preview-container" class="hidden flex flex-col items-center space-y-3">
+              <img id="image-preview" src="#" alt="미리보기" class="max-h-64 rounded-lg shadow border border-stone-300 object-contain">
+              <button onclick="cancelImageSelect(event)" class="text-xs text-stone-500 hover:text-indigo-950 font-bold flex items-center space-x-1">
+                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                <span>이미지 제거하기</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 확실한 포인트 액션 버튼 -->
+          <button id="btn-analyze-image" onclick="analyzeHanjaImage()" class="w-full bg-indigo-900 hover:bg-indigo-950 text-white font-bold py-3.5 px-4 rounded-xl transition shadow flex items-center justify-center space-x-2">
+            <i data-lucide="sparkles" class="w-5 h-5 text-indigo-300 animate-pulse"></i>
+            <span>AI 한자 분석 및 자동 저장하기</span>
+          </button>
+        </div>
+
+        <div id="ai-processing-status" class="hidden p-6 bg-white/90 border border-indigo-100 rounded-xl text-center space-y-3">
+          <div class="flex justify-center items-center space-x-3">
+            <div class="animate-spin rounded-full h-6 w-6 border-2 border-indigo-900 border-t-transparent"></div>
+            <span class="text-indigo-950 font-bold" id="ai-status-text">Gemini가 한자 모양, 뜻, 소리를 정밀 분석 중입니다...</span>
+          </div>
+          <p class="text-stone-500 text-xs">약 5~15초 정도 소요될 수 있습니다. 잠시만 기다려 주세요.</p>
+        </div>
+
+        <!-- AI로 추출 완료된 한자 카드 미리 확인 -->
+        <div id="ai-results-container" class="hidden space-y-4">
+          <h3 class="text-lg font-bold text-indigo-950">추출 완료! 아래 한자들이 안전하게 저장되었습니다.</h3>
+          <div id="ai-results-list" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <!-- 동적 한자 미니 카드들 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 수동 등록 섹션 (차분한 디자인 적용) -->
+      <div id="method-manual-container" class="hidden bg-white/90 p-6 rounded-xl border border-stone-200 space-y-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-stone-700 mb-1">저장할 묶음(폴더) 선택</label>
+            <select id="manual-folder-select" class="w-full border border-stone-300 rounded-lg p-2.5 bg-stone-50/50 text-stone-800">
+              <!-- 폴더 목록 -->
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-stone-700 mb-1">한자 글자 (모양)</label>
+            <input type="text" id="manual-hanja" placeholder="예: 溫" class="w-full border border-stone-300 rounded-lg p-2.5 text-stone-900 font-black text-center text-xl bg-stone-50/50 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-bold text-stone-700 mb-1">소리 (음)</label>
+            <input type="text" id="manual-sound" placeholder="예: 온" class="w-full border border-stone-300 rounded-lg p-2.5 text-stone-800 bg-stone-50/50 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-stone-700 mb-1">뜻 (훈)</label>
+            <input type="text" id="manual-meaning" placeholder="예: 따뜻할" class="w-full border border-stone-300 rounded-lg p-2.5 text-stone-800 bg-stone-50/50 focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+          </div>
+        </div>
+
+        <button onclick="saveManualHanja()" class="w-full bg-indigo-900 hover:bg-indigo-950 text-white font-bold py-3 px-4 rounded-xl transition shadow flex items-center justify-center space-x-2">
+          <i data-lucide="save" class="w-5 h-5 text-indigo-300"></i>
+          <span>한자 카드로 추가하기</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 학습 준비/폴더 선택 모달 혹은 영역 -->
+    <div id="tab-preparation" class="tab-content hidden space-y-6">
+      <div class="flex items-center space-x-2 mb-2">
+        <button onclick="switchTab('home')" class="p-1 hover:bg-stone-200 rounded-lg transition">
+          <i data-lucide="arrow-left" class="w-5 h-5 text-stone-700"></i>
+        </button>
+        <h2 class="text-2xl font-bold text-indigo-950" id="prep-title">학습 대상 폴더 선택</h2>
+      </div>
+
+      <div class="bg-white/95 p-6 rounded-xl border border-stone-200 space-y-6">
+        <div class="text-stone-700 font-bold text-sm">학습할 폴더들을 다중 선택한 뒤 시작할 수 있습니다.</div>
         
-        const settingsPanel = document.getElementById('settings-panel');
-        const tocPanel = document.getElementById('toc-panel');
-        const overlay = document.getElementById('overlay');
+        <div id="prep-folder-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-60 overflow-y-auto pr-2">
+          <!-- 폴더 체크박스 리스트 동적 렌더링 -->
+        </div>
+
+        <div class="border-t border-stone-200 pt-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div class="text-xs text-stone-500 font-medium" id="prep-selected-summary">선택된 카드가 없습니다.</div>
+          <button id="btn-start-study" onclick="executeStudyStart()" class="w-full sm:w-auto bg-indigo-900 hover:bg-indigo-950 text-white font-bold px-8 py-3 rounded-xl transition shadow disabled:opacity-40 disabled:cursor-not-allowed" disabled>
+            학습 시작하기
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 기능 2: 플래시카드 실행 화면 -->
+    <div id="tab-flashcard" class="tab-content hidden space-y-6">
+      <div class="flex items-center justify-between">
+        <button onclick="confirmExitStudy()" class="text-stone-600 hover:text-stone-900 flex items-center space-x-1 bg-stone-100 hover:bg-stone-200 px-3 py-1.5 rounded-lg transition border border-stone-200">
+          <i data-lucide="log-out" class="w-4 h-4 text-stone-500"></i>
+          <span class="text-xs font-bold">학습 종료</span>
+        </button>
+        <div class="text-stone-600 text-xs font-bold flex items-center space-x-2">
+          <span>남은 한자:</span>
+          <span class="bg-indigo-50 border border-indigo-200 text-indigo-950 px-2.5 py-0.5 rounded-full" id="fc-remaining-count">0</span>
+        </div>
+      </div>
+
+      <!-- 플래시카드 컨테이너 (고풍스러운 이중 보더 테두리) -->
+      <div class="relative w-full max-w-sm mx-auto h-[410px] flex items-center justify-center">
+        <!-- 전통적인 서당 서책 느낌의 뒤쪽 겹친 카드 데코 -->
+        <div class="absolute w-11/12 h-[380px] bg-stone-200/80 rounded-2xl transform rotate-2 translate-y-3 border border-stone-300 pointer-events-none"></div>
+        <div class="absolute w-11/12 h-[380px] bg-stone-100/90 rounded-2xl transform -rotate-1 translate-y-1.5 border border-stone-300 pointer-events-none"></div>
+
+        <!-- 실물 스와이프 인터랙티브 카드 -->
+        <div id="swipe-card-element" class="swipe-card absolute w-full h-[380px] bg-white rounded-2xl shadow-xl border-4 traditional-border cursor-grab active:cursor-grabbing flex flex-col justify-between p-6 select-none">
+          <!-- 별 아이콘과 진척도 -->
+          <div class="flex justify-between items-center">
+            <button id="fc-fav-btn" onclick="toggleCurrentCardFavorite(event)" class="text-stone-300 hover:text-indigo-900 transition">
+              <i data-lucide="star" class="w-6 h-6" id="fc-fav-icon"></i>
+            </button>
+            <span class="text-xs font-bold text-stone-400 bg-stone-50 px-2.5 py-1 rounded border border-stone-100" id="fc-progress-label">1/1</span>
+          </div>
+
+          <!-- 메인 한자 및 정답 안내 -->
+          <div class="flex-grow flex flex-col justify-center items-center text-center space-y-4">
+            <!-- 한자 모양 (가장 또렷하고 깊은 먹빛) -->
+            <div id="fc-hanja" class="hanja-text text-8xl text-stone-900 select-none"></div>
+            
+            <!-- 소리와 뜻 (기본 숨김, 터치 시 페이드인) -->
+            <div id="fc-answer-container" class="opacity-0 transition-opacity duration-300 pointer-events-none mt-4 w-full">
+              <div class="text-center border-t border-stone-200 pt-3 flex flex-col items-center">
+                <span id="fc-meaning" class="text-stone-500 text-sm font-semibold">뜻: 따뜻할</span>
+                <span id="fc-sound" class="text-3xl font-black text-indigo-950 mt-1">온</span>
+              </div>
+            </div>
+
+            <!-- 터치 안내 힌트 버튼 -->
+            <button id="fc-hint-button" onclick="revealFlashcardAnswer()" class="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-950 border border-indigo-200 px-3 py-2 rounded-full transition font-bold">
+              터치하여 훈음(뜻과 소리) 확인
+            </button>
+          </div>
+
+          <!-- 스와이프 안내 바닥글 (단일 쪽빛 색감 유지) -->
+          <div class="border-t border-stone-100 pt-3">
+            <div class="flex justify-between items-center text-[10px] text-stone-400 font-bold">
+              <span class="text-stone-500 flex items-center space-x-1">
+                <i data-lucide="arrow-left" class="w-3 h-3"></i>
+                <span>틀림 (다시 공부)</span>
+              </span>
+              <span>양옆으로 슬라이드</span>
+              <span class="text-indigo-900 flex items-center space-x-1">
+                <span>맞춤 (완료)</span>
+                <i data-lucide="arrow-right" class="w-3 h-3"></i>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 직관성을 보완해 주는 하단 조작 버튼 (포인트 컬러 적용) -->
+      <div class="flex justify-center space-x-4 max-w-sm mx-auto">
+        <button onclick="handleStudySwipe('left')" class="flex-1 bg-stone-100 border border-stone-300 text-stone-700 font-bold py-3.5 px-4 rounded-xl hover:bg-stone-200 transition shadow-sm flex items-center justify-center space-x-1.5">
+          <i data-lucide="x" class="w-4 h-4 text-stone-500"></i>
+          <span class="text-xs">모름 (맨뒤로 이동)</span>
+        </button>
+        <button onclick="handleStudySwipe('right')" class="flex-1 bg-indigo-900 text-white font-bold py-3.5 px-4 rounded-xl hover:bg-indigo-950 transition shadow-sm flex items-center justify-center space-x-1.5">
+          <i data-lucide="check" class="w-4 h-4 text-indigo-300"></i>
+          <span class="text-xs">앎 (학습 완료)</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 기능 3: 한자 쓰기 연습 화면 -->
+    <div id="tab-writing" class="tab-content hidden space-y-4">
+      <div class="flex items-center justify-between">
+        <button onclick="confirmExitStudy()" class="text-stone-600 hover:text-stone-900 flex items-center space-x-1 bg-stone-100 hover:bg-stone-200 px-3 py-1.5 rounded-lg transition border border-stone-200">
+          <i data-lucide="log-out" class="w-4 h-4 text-stone-500"></i>
+          <span class="text-xs font-bold">학습 종료</span>
+        </button>
         
-        const toggleBtn = document.getElementById('toggle-settings');
-        const closeBtn = document.getElementById('close-settings');
-        const openTocBtn = document.getElementById('open-toc');
-        const closeTocBtn = document.getElementById('close-toc');
-        const prevBtn = document.getElementById('prev-btn');
-        const nextBtn = document.getElementById('next-btn');
-        const chapterList = document.getElementById('chapter-list');
-        const fontFamilySelect = document.getElementById('font-family-select');
-        const fontSizeSlider = document.getElementById('font-size-slider');
-        const fontSizeVal = document.getElementById('font-size-val');
+        <!-- 연습/테스트 모드 전환 탭 (단일 쪽빛 바인딩) -->
+        <div class="bg-stone-200 p-0.5 rounded-xl flex">
+          <button id="btn-mode-practice" onclick="toggleWritingMode('practice')" class="px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 bg-white text-indigo-950 shadow">연습 모드</button>
+          <button id="btn-mode-test" onclick="toggleWritingMode('test')" class="px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 text-stone-500 hover:text-indigo-950">테스트 모드</button>
+        </div>
 
-        let settings = JSON.parse(localStorage.getItem('viewerSettings_v12')) || {
-            theme: 'light', fontFamily: 'font-batang', fontSize: 18, uiVisible: true
-        };
-        let chapters = [];
-        let currentChapterIndex = 0;
-        let touchStartY = 0;
-        const THRESHOLD = 80;
+        <div class="text-stone-600 text-xs font-bold">
+          남은 학습: <span id="wr-remaining-count" class="bg-indigo-50 text-indigo-950 px-2 py-0.5 rounded-full border border-indigo-200">0</span>
+        </div>
+      </div>
 
-        function applySettings() {
-            const isDark = settings.theme === 'dark';
-            
-            if (isDark) {
-                document.documentElement.classList.add('dark');
-                document.body.className = 'bg-zinc-950 text-zinc-300 min-h-screen flex flex-col items-center dark';
-            } else {
-                document.documentElement.classList.remove('dark');
-                document.body.className = 'bg-white text-gray-900 min-h-screen flex flex-col items-center';
-            }
-            
-            // 설정창 내부 버튼들 클래스 (보스 요청: 설정창 배경은 하양 고정)
-            document.getElementById('btn-light').className = `px-5 py-2 rounded-lg text-sm font-bold transition-all ${!isDark ? 'bg-white shadow-sm text-black' : 'text-gray-400'}`;
-            document.getElementById('btn-dark').className = `px-5 py-2 rounded-lg text-sm font-bold transition-all ${isDark ? 'bg-zinc-700 shadow-sm text-white' : 'text-gray-400'}`;
-            
-            contentArea.classList.remove('font-gulim', 'font-batang', 'font-myungjo');
-            contentArea.classList.add(settings.fontFamily);
-            fontFamilySelect.value = settings.fontFamily;
-            contentArea.style.fontSize = settings.fontSize + 'px';
-            fontSizeSlider.value = settings.fontSize;
-            fontSizeVal.innerText = settings.fontSize + 'px';
-            
-            updateUIVisibility();
-            localStorage.setItem('viewerSettings_v12', JSON.stringify(settings));
+      <!-- 훈음 문제 안내창 (전통 책장 스타일) -->
+      <div class="bg-white/90 p-4 rounded-xl border border-stone-200 shadow-sm text-center">
+        <div class="text-stone-500 text-xs font-medium">소리와 뜻을 보고 아래에 올바른 모양을 그려보세요</div>
+        <div class="text-2xl font-black text-stone-900 mt-1 flex justify-center items-center space-x-2">
+          <span id="wr-prompt-meaning">뜻</span>
+          <span id="wr-prompt-sound" class="text-indigo-950 font-black border-b-2 border-indigo-950 px-1">소리</span>
+        </div>
+      </div>
+
+      <!-- 필기구 가이드 캔버스 영역 -->
+      <div class="relative max-w-sm mx-auto aspect-square bg-stone-100 rounded-2xl shadow-inner border border-stone-300 overflow-hidden">
+        <!-- 연습모드 바탕 반투명 가이드 글자 (가독성을 위해 투명도 0.5(50%) 수준으로 명확하게 처리) -->
+        <div id="canvas-guide-text" class="absolute inset-0 flex items-center justify-center select-none pointer-events-none text-indigo-950 text-[180px] hanja-text transition-all duration-300" style="opacity: 0.5;">
+          -
+        </div>
+        
+        <!-- 필기 캔버스 본체 -->
+        <canvas id="writing-canvas" class="absolute inset-0 w-full h-full cursor-crosshair z-10 touch-none"></canvas>
+
+        <!-- 캔버스 지우개 버튼 -->
+        <button onclick="clearCanvas()" class="absolute bottom-3 right-3 bg-white/95 hover:bg-white text-stone-700 p-2.5 rounded-full border border-stone-200 shadow-md transition z-20" title="지우기">
+          <i data-lucide="eraser" class="w-5 h-5 text-indigo-950"></i>
+        </button>
+      </div>
+
+      <!-- 완료 제출 및 자가 평가 버튼 존 (쪽빛 일원화) -->
+      <div id="wr-action-zone" class="max-w-sm mx-auto space-y-3">
+        <!-- 테스트 모드 정답 대조 버튼 -->
+        <button id="btn-wr-submit" onclick="revealWritingAnswer()" class="w-full bg-indigo-900 hover:bg-indigo-950 text-white font-bold py-3.5 px-4 rounded-xl transition shadow flex items-center justify-center space-x-2">
+          <i data-lucide="eye" class="w-5 h-5 text-indigo-300"></i>
+          <span>필기 정답 대조하기</span>
+        </button>
+
+        <!-- 스와이프형 정답 체크 선택지 (오답: 무채색 회색, 정답: 깊은 쪽빛) -->
+        <div id="wr-grade-zone" class="hidden grid grid-cols-2 gap-4">
+          <button onclick="handleWritingSwipe('left')" class="bg-stone-100 border border-stone-300 text-stone-700 font-bold py-3.5 px-4 rounded-xl hover:bg-stone-200 transition shadow-sm flex items-center justify-center space-x-1.5">
+            <i data-lucide="x" class="w-4 h-4 text-stone-400"></i>
+            <span class="text-xs">틀렸음 (재학습)</span>
+          </button>
+          <button onclick="handleWritingSwipe('right')" class="bg-indigo-900 text-white font-bold py-3.5 px-4 rounded-xl hover:bg-indigo-950 transition shadow-sm flex items-center justify-center space-x-1.5">
+            <i data-lucide="check" class="w-4 h-4 text-indigo-300"></i>
+            <span class="text-xs">맞았음 (패스)</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 기능 4: AI 학습 분석 탭 -->
+    <div id="tab-analytics" class="tab-content hidden space-y-6">
+      <div class="flex items-center space-x-2 mb-2">
+        <button onclick="switchTab('home')" class="p-1 hover:bg-stone-200 rounded-lg transition">
+          <i data-lucide="arrow-left" class="w-5 h-5 text-stone-700"></i>
+        </button>
+        <h2 class="text-2xl font-bold text-indigo-950">AI 학습 분석 & 일일 복습 추천</h2>
+      </div>
+
+      <!-- AI 분석 카드 패널 (부드러운 저채도 배경에 깊은 색 테두리) -->
+      <div class="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-200 space-y-4">
+        <div class="flex items-center space-x-2 text-indigo-950">
+          <i data-lucide="brain-circuit" class="w-6 h-6 text-indigo-800"></i>
+          <h3 class="text-lg font-bold">오답 패턴 인공지능 분석</h3>
+        </div>
+        <p class="text-stone-600 text-sm leading-relaxed">
+          과거의 오답 횟수 및 학습 기록을 세부 진단하여 취약한 한자 목록을 찾아냅니다. 
+          Gemini AI의 조언을 받아 기가 막힌 전통 암기 조언 스토리 및 맞춤 학습 루틴 리포트를 발급해 보세요.
+        </p>
+
+        <button onclick="runAIAnalysis()" class="w-full bg-indigo-900 hover:bg-indigo-950 text-white font-bold py-3 px-4 rounded-xl transition shadow flex items-center justify-center space-x-2">
+          <i data-lucide="sparkles" class="w-5 h-5 text-indigo-300"></i>
+          <span>Gemini AI 분석 리포트 받아보기</span>
+        </button>
+      </div>
+
+      <!-- AI 분석 로딩 상태 -->
+      <div id="ai-analysis-loading" class="hidden p-8 bg-white/90 border border-stone-200 rounded-2xl text-center space-y-3">
+        <div class="flex justify-center items-center space-x-3">
+          <div class="animate-spin rounded-full h-6 w-6 border-2 border-indigo-900 border-t-transparent"></div>
+          <span class="text-indigo-950 font-bold">AI 비서가 사용자의 오답 한자 데이터를 정밀 처방 중...</span>
+        </div>
+        <p class="text-stone-500 text-xs">약 5~10초 가량 소요됩니다.</p>
+      </div>
+
+      <!-- 분석 결과 표시 영역 (종이 테두리) -->
+      <div id="ai-analysis-result" class="hidden space-y-6">
+        <!-- AI 피드백 서책 오버레이 -->
+        <div class="bg-white/95 p-6 rounded-2xl border-4 traditional-border space-y-4">
+          <h4 class="text-lg font-bold text-indigo-950 border-b border-stone-200 pb-2 flex items-center space-x-2">
+            <i data-lucide="scroll" class="w-5 h-5 text-indigo-800"></i>
+            <span>온고지신 AI 훈장님의 학습 처방전</span>
+          </h4>
+          <div class="prose max-w-none text-stone-700 text-sm leading-relaxed whitespace-pre-wrap" id="ai-feedback-text">
+            <!-- AI 결과 적용 -->
+          </div>
+        </div>
+
+        <!-- 일일 추천 복습 폴더 -->
+        <div class="space-y-3">
+          <h4 class="text-sm font-bold text-indigo-950 flex items-center space-x-1.5">
+            <i data-lucide="repeat" class="w-4 h-4 text-indigo-800"></i>
+            <span>오늘 집중 격파가 필요한 상위 오답 한자군</span>
+          </h4>
+          <div id="ai-weak-cards-list" class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <!-- 동적 취약 한자 목록 -->
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 즐겨찾기 보관함 전용 탭 -->
+    <div id="tab-favorites" class="tab-content hidden space-y-6">
+      <div class="flex items-center space-x-2 mb-2">
+        <button onclick="switchTab('home')" class="p-1 hover:bg-stone-200 rounded-lg transition">
+          <i data-lucide="arrow-left" class="w-5 h-5 text-stone-700"></i>
+        </button>
+        <h2 class="text-2xl font-bold text-indigo-950 flex items-center space-x-2">
+          <i data-lucide="star" class="w-6 h-6 fill-indigo-900 text-indigo-900"></i>
+          <span>즐겨찾기 보관함</span>
+        </h2>
+      </div>
+
+      <div class="bg-white/90 p-6 rounded-xl border border-stone-200 space-y-4">
+        <div class="text-stone-500 text-xs">학습 중에 선별하여 저장해 놓은 나만의 중요 한자 암기 보관소입니다.</div>
+        <div id="favorite-cards-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <!-- 즐겨찾기 리스트 -->
+        </div>
+      </div>
+    </div>
+
+    <!-- 개별 묶음(폴더) 상세보기 탭 -->
+    <div id="tab-folder-detail" class="tab-content hidden space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-stone-300 pb-4">
+        <div class="flex items-center space-x-2">
+          <button onclick="switchTab('home')" class="p-1 hover:bg-stone-200 rounded-lg transition">
+            <i data-lucide="arrow-left" class="w-5 h-5 text-stone-700"></i>
+          </button>
+          <div>
+            <h2 class="text-2xl font-black text-indigo-950" id="detail-folder-name">폴더명</h2>
+            <p class="text-stone-500 text-xs mt-0.5">총 <span id="detail-card-count">0</span>개의 한자가 수집되어 있습니다.</p>
+          </div>
+        </div>
+        <div class="flex space-x-2">
+          <button id="btn-detail-flashcard" class="bg-indigo-900 hover:bg-indigo-950 text-white text-xs font-bold px-3 py-2.5 rounded-lg transition flex items-center space-x-1 shadow">
+            <i data-lucide="credit-card" class="w-3.5 h-3.5 text-indigo-300"></i>
+            <span>카드암기</span>
+          </button>
+          <button id="btn-detail-writing" class="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-2.5 rounded-lg transition flex items-center space-x-1 shadow">
+            <i data-lucide="pen-tool" class="w-3.5 h-3.5 text-indigo-100"></i>
+            <span>한자쓰기</span>
+          </button>
+          <button onclick="deleteCurrentFolder()" class="bg-stone-100 hover:bg-stone-200 text-stone-700 text-xs font-bold px-3 py-2.5 rounded-lg transition flex items-center space-x-1 border border-stone-300">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5 text-stone-400"></i>
+            <span>묶음삭제</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-white/90 p-4 rounded-xl border border-stone-200">
+        <div id="detail-cards-grid" class="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <!-- 카드 리스트 -->
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- 하단 고정 바 (검은 서당 스타일 기와 톤에 쪽빛 포인트 활성) -->
+  <footer class="fixed bottom-0 left-0 right-0 bg-stone-900 border-t border-stone-800 text-stone-400 py-2.5 px-4 z-40 shadow-xl">
+    <div class="max-w-md mx-auto flex justify-around items-center">
+      <button onclick="switchTab('home')" class="flex flex-col items-center space-y-0.5 focus:outline-none nav-btn" id="nav-home">
+        <i data-lucide="home" class="w-5 h-5"></i>
+        <span class="text-[10px]">홈/묶음</span>
+      </button>
+      <button onclick="switchTab('recognition')" class="flex flex-col items-center space-y-0.5 focus:outline-none nav-btn" id="nav-recognition">
+        <i data-lucide="plus-square" class="w-5 h-5"></i>
+        <span class="text-[10px]">촬영인식</span>
+      </button>
+      <button onclick="startStudyPreparation('flashcard')" class="flex flex-col items-center space-y-0.5 focus:outline-none nav-btn" id="nav-flashcard">
+        <i data-lucide="credit-card" class="w-5 h-5"></i>
+        <span class="text-[10px]">플래시카드</span>
+      </button>
+      <button onclick="startStudyPreparation('writing')" class="flex flex-col items-center space-y-0.5 focus:outline-none nav-btn" id="nav-writing">
+        <i data-lucide="pen-tool" class="w-5 h-5"></i>
+        <span class="text-[10px]">한자쓰기</span>
+      </button>
+      <button onclick="switchTab('analytics')" class="flex flex-col items-center space-y-0.5 focus:outline-none nav-btn" id="nav-analytics">
+        <i data-lucide="brain-circuit" class="w-5 h-5"></i>
+        <span class="text-[10px]">AI분석</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- [모달] API 설정 모달 (정통 이중 보더 적용) -->
+  <div id="settingsModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-md border-4 traditional-border p-6 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-stone-200 pb-3">
+        <h3 class="text-lg font-bold text-indigo-950 flex items-center space-x-1.5">
+          <i data-lucide="key" class="w-5 h-5 text-indigo-800"></i>
+          <span>Gemini API 키 설정</span>
+        </h3>
+        <button onclick="closeSettings()" class="text-stone-400 hover:text-stone-700">
+          <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <p class="text-stone-600 text-xs leading-relaxed">
+          카메라 인식(Vision OCR) 및 개별 취약 한자 분석을 위한 처방 피드백용으로 안전하게 기기 내부 브라우저에만 저장되어 활용됩니다.
+        </p>
+        <div>
+          <label class="block text-xs font-bold text-stone-700 mb-1">Gemini API Key</label>
+          <input type="password" id="input-api-key" placeholder="AIzaSy..." class="w-full border border-stone-300 rounded-lg p-2.5 text-stone-800 text-sm shadow-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t border-stone-100">
+        <button onclick="closeSettings()" class="bg-stone-100 hover:bg-stone-200 text-stone-800 px-4 py-2 rounded-lg text-xs font-bold transition">취소</button>
+        <button onclick="saveApiKey()" class="bg-indigo-900 hover:bg-indigo-950 text-white px-4 py-2 rounded-lg text-xs font-bold transition shadow">보안 저장 완료</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- [모달] 폴더 생성 모달 -->
+  <div id="createFolderModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-sm border-4 traditional-border p-6 space-y-4 shadow-2xl">
+      <div class="flex justify-between items-center border-b border-stone-200 pb-3">
+        <h3 class="text-lg font-bold text-indigo-950 flex items-center space-x-1.5">
+          <i data-lucide="folder-plus" class="w-5 h-5 text-indigo-800"></i>
+          <span>새 한자 묶음 생성</span>
+        </h3>
+        <button onclick="closeCreateFolderModal()" class="text-stone-400 hover:text-stone-700">
+          <i data-lucide="x" class="w-6 h-6"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-bold text-stone-700 mb-1">묶음(폴더) 명칭</label>
+          <input type="text" id="input-folder-name" placeholder="예: 한성고사 한문 대비" class="w-full border border-stone-300 rounded-lg p-2.5 text-stone-800 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none">
+        </div>
+      </div>
+
+      <div class="flex justify-end space-x-2 pt-2 border-t border-stone-100">
+        <button onclick="closeCreateFolderModal()" class="bg-stone-100 hover:bg-stone-200 text-stone-800 px-4 py-2 rounded-lg text-xs font-bold transition">취소</button>
+        <button onclick="createFolder()" class="bg-indigo-900 hover:bg-indigo-950 text-white px-4 py-2 rounded-lg text-xs font-bold transition shadow">폴더 만들기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- [모달] 사용자 맞춤형 커스텀 메시지창 (alert 대체) -->
+  <div id="customAlertModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-sm border-4 traditional-border p-5 space-y-4 text-center shadow-2xl">
+      <div class="flex justify-center text-indigo-950" id="alert-icon-container">
+        <i data-lucide="info" class="w-12 h-12"></i>
+      </div>
+      <h3 class="text-lg font-bold text-indigo-950" id="alert-title">안내</h3>
+      <p class="text-stone-600 text-xs leading-relaxed" id="alert-message">메시지 내용입니다.</p>
+      <div class="flex justify-center">
+        <button onclick="closeCustomAlert()" class="bg-indigo-900 hover:bg-indigo-950 text-white font-bold px-6 py-2 rounded-lg text-xs transition shadow">확인</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- [모달] 학습 탈출 확인 모달 -->
+  <div id="studyExitConfirmModal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl w-full max-w-sm border-4 traditional-border p-5 space-y-4 text-center shadow-2xl">
+      <div class="flex justify-center text-indigo-950">
+        <i data-lucide="help-circle" class="w-12 h-12"></i>
+      </div>
+      <h3 class="text-lg font-bold text-indigo-950">학습을 중단할까요?</h3>
+      <p class="text-stone-600 text-xs leading-relaxed">진행 중인 덱 진척도는 무시되고 초기화될 수 있습니다. 정말 홈으로 나갈까요?</p>
+      <div class="flex justify-center space-x-3">
+        <button onclick="closeExitConfirm()" class="bg-stone-100 hover:bg-stone-200 text-stone-800 px-4 py-2 rounded-lg text-xs font-bold transition">계속 공부</button>
+        <button onclick="exitStudy()" class="bg-indigo-900 hover:bg-indigo-950 text-white font-bold px-5 py-2 rounded-lg text-xs transition shadow">종료하기</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript 애플리케이션 핵심 로직 -->
+  <script>
+    // --- 1. 초기 전역 데이터 구조화 및 로컬스토리지 연동 ---
+    let appState = {
+      apiKey: "",
+      folders: [
+        {
+          id: "default-folder",
+          name: "기초 부수 학습",
+          createdAt: Date.now()
         }
+      ],
+      cards: [
+        { id: "sample-1", folderId: "default-folder", hanja: "溫", sound: "온", meaning: "따뜻할", favorite: false, incorrectCount: 1, correctCount: 3 },
+        { id: "sample-2", folderId: "default-folder", hanja: "故", sound: "고", meaning: "옛/연고", favorite: true, incorrectCount: 3, correctCount: 2 },
+        { id: "sample-3", folderId: "default-folder", hanja: "知", sound: "지", meaning: "알", favorite: false, incorrectCount: 0, correctCount: 5 },
+        { id: "sample-4", folderId: "default-folder", hanja: "新", sound: "신", meaning: "새로울", favorite: false, incorrectCount: 2, correctCount: 1 }
+      ]
+    };
 
-        function updateUIVisibility() {
-            const header = document.getElementById('header');
-            const bottomNav = document.getElementById('bottom-nav');
-            const toggleS = document.getElementById('toggle-settings');
-            
-            if (settings.uiVisible) {
-                header.classList.remove('ui-hidden');
-                bottomNav.classList.remove('ui-hidden-bottom');
-                toggleS.classList.remove('ui-hidden-right');
-            } else {
-                header.classList.add('ui-hidden');
-                bottomNav.classList.add('ui-hidden-bottom');
-                toggleS.classList.add('ui-hidden-right');
-            }
+    // 로컬스토리지 복구
+    function loadSavedData() {
+      const saved = localStorage.getItem("ongojisin_state");
+      if (saved) {
+        try {
+          appState = JSON.parse(saved);
+        } catch (e) {
+          console.error("데이터 로딩 실패, 초기값 사용", e);
         }
+      }
+      updateApiKeyStatus();
+      renderFolders();
+      renderStatistics();
+    }
 
-        async function saveToDB(data) {
-            const tx = db.transaction(storeName, "readwrite");
-            tx.objectStore(storeName).put(data, "lastNovel");
-        }
+    function saveData() {
+      localStorage.setItem("ongojisin_state", JSON.stringify(appState));
+      renderStatistics();
+    }
 
-        function loadLastSession() {
-            const tx = db.transaction(storeName, "readonly");
-            const getRequest = tx.objectStore(storeName).get("lastNovel");
-            getRequest.onsuccess = () => {
-                const data = getRequest.result;
-                if (data && data.chapters) {
-                    chapters = data.chapters;
-                    currentChapterIndex = data.currentIndex || 0;
-                    showViewer();
-                }
-            };
-        }
+    // --- 2. 기본 라이브러리 및 아이콘 로딩 제어 ---
+    document.addEventListener("DOMContentLoaded", () => {
+      loadSavedData();
+      lucide.createIcons();
+      switchTab('home');
+      initWritingCanvas();
+      initSwipeFeatures();
+    });
 
-        function buildToc() {
-            chapterList.innerHTML = '';
-            chapters.forEach((chapter, index) => {
-                const item = document.createElement('div');
-                item.className = `chapter-item p-6 border-b border-gray-100 cursor-pointer hover:bg-blue-50 flex items-center transition-colors`;
-                if (index === currentChapterIndex) {
-                    item.classList.add('bg-blue-50', 'text-blue-600', 'font-bold', 'border-l-4', 'border-l-blue-600');
-                }
-                item.innerText = chapter.title;
-                item.onclick = () => { currentChapterIndex = index; renderChapter(); closeToc(); };
-                chapterList.appendChild(item);
+    // --- 3. 공통 커스텀 모달 (브라우저 Alert 대체) ---
+    function showCustomAlert(title, message, iconType = "info") {
+      document.getElementById("alert-title").innerText = title;
+      document.getElementById("alert-message").innerText = message;
+      
+      const iconContainer = document.getElementById("alert-icon-container");
+      let iconMarkup = '<i data-lucide="info" class="w-12 h-12 text-indigo-950"></i>';
+      
+      if (iconType === "success") {
+        iconMarkup = '<i data-lucide="check-circle" class="w-12 h-12 text-indigo-800"></i>';
+      } else if (iconType === "warning") {
+        iconMarkup = '<i data-lucide="alert-triangle" class="w-12 h-12 text-indigo-950"></i>';
+      } else if (iconType === "error") {
+        iconMarkup = '<i data-lucide="x-circle" class="w-12 h-12 text-indigo-950 opacity-70"></i>';
+      }
+      
+      iconContainer.innerHTML = iconMarkup;
+      lucide.createIcons();
+      
+      document.getElementById("customAlertModal").classList.remove("hidden");
+    }
+
+    function closeCustomAlert() {
+      document.getElementById("customAlertModal").classList.add("hidden");
+    }
+
+    // --- 4. 네비게이션 제어 ---
+    let currentTab = 'home';
+    function switchTab(tabId) {
+      currentTab = tabId;
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.add('hidden');
+      });
+      
+      const targetTab = document.getElementById(`tab-${tabId}`);
+      if (targetTab) {
+        targetTab.classList.remove('hidden');
+      }
+
+      // 하단 네비게이션 액티브 상태 조율 (쪽빛 포인트 하이라이트 전환)
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('text-indigo-300', 'font-black');
+        btn.classList.add('text-stone-400');
+      });
+      const activeNav = document.getElementById(`nav-${tabId}`);
+      if (activeNav) {
+        activeNav.classList.remove('text-stone-400');
+        activeNav.classList.add('text-indigo-300', 'font-black');
+      }
+
+      if (tabId === 'home') {
+        renderFolders();
+      } else if (tabId === 'recognition') {
+        fillFolderDropdowns();
+      } else if (tabId === 'favorites') {
+        renderFavorites();
+      } else if (tabId === 'writing') {
+        // 쓰기 탭이 활성화되는 찰나의 순간에 캔버스 크기를 갱신하여 드로잉 막힘 해결
+        setTimeout(resizeCanvas, 50);
+      }
+    }
+
+    // --- 5. 폴더 데이터 생성 및 관리 ---
+    function renderFolders() {
+      const container = document.getElementById("folder-list-container");
+      container.innerHTML = "";
+
+      appState.folders.forEach(folder => {
+        const folderCards = appState.cards.filter(c => c.folderId === folder.id);
+        const masteryPercentage = calculateFolderMastery(folder.id);
+
+        const folderEl = document.createElement("div");
+        folderEl.className = "bg-white/90 p-5 rounded-xl border border-stone-200 shadow-sm hover:shadow transition duration-200 cursor-pointer flex flex-col justify-between";
+        folderEl.setAttribute("onclick", `openFolderDetail('${folder.id}')`);
+        folderEl.innerHTML = `
+          <div>
+            <div class="flex justify-between items-start mb-3">
+              <span class="p-2 bg-indigo-50 text-indigo-950 rounded-lg">
+                <i data-lucide="folder" class="w-5 h-5"></i>
+              </span>
+              <span class="text-xs text-indigo-950 bg-indigo-50 px-2.5 py-0.5 rounded font-bold">한자 ${folderCards.length}개</span>
+            </div>
+            <h4 class="text-lg font-bold text-stone-900 truncate">${folder.name}</h4>
+          </div>
+          
+          <div class="mt-4 pt-4 border-t border-stone-100 flex items-center justify-between">
+            <div class="w-full">
+              <div class="flex justify-between items-center text-xs mb-1">
+                <span class="text-stone-400 font-bold">암기 완독률</span>
+                <span class="font-black text-indigo-950">${masteryPercentage}%</span>
+              </div>
+              <div class="w-full bg-stone-100 h-2 rounded-full overflow-hidden border border-stone-200/50">
+                <div class="bg-indigo-800 h-full rounded-full" style="width: ${masteryPercentage}%"></div>
+              </div>
+            </div>
+          </div>
+        `;
+        container.appendChild(folderEl);
+      });
+      lucide.createIcons();
+    }
+
+    function calculateFolderMastery(folderId) {
+      const folderCards = appState.cards.filter(c => c.folderId === folderId);
+      if (folderCards.length === 0) return 0;
+      const memorized = folderCards.filter(c => c.correctCount > c.incorrectCount).length;
+      return Math.round((memorized / folderCards.length) * 100);
+    }
+
+    function renderStatistics() {
+      document.getElementById("stat-folders-count").innerText = `${appState.folders.length}개`;
+      document.getElementById("stat-cards-count").innerText = `${appState.cards.length}개`;
+
+      if (appState.cards.length === 0) {
+        document.getElementById("stat-mastery-rate").innerText = "0%";
+        return;
+      }
+      const memorized = appState.cards.filter(c => c.correctCount > c.incorrectCount).length;
+      const rate = Math.round((memorized / appState.cards.length) * 100);
+      document.getElementById("stat-mastery-rate").innerText = `${rate}%`;
+    }
+
+    // --- API 키 UI 제어 및 보안 저장 ---
+    function openSettings() {
+      document.getElementById("input-api-key").value = appState.apiKey || "";
+      document.getElementById("settingsModal").classList.remove("hidden");
+    }
+
+    function closeSettings() {
+      document.getElementById("settingsModal").classList.add("hidden");
+    }
+
+    function saveApiKey() {
+      const val = document.getElementById("input-api-key").value.trim();
+      appState.apiKey = val;
+      saveData();
+      closeSettings();
+      updateApiKeyStatus();
+      showCustomAlert("저장 완료", "Gemini API 키가 안전하게 로컬 장치에 연동 보관되었습니다.", "success");
+    }
+
+    function updateApiKeyStatus() {
+      const notice = document.getElementById("apiKeyNotice");
+      if (!appState.apiKey) {
+        notice.classList.remove("hidden");
+      } else {
+        notice.classList.add("hidden");
+      }
+    }
+
+    // --- 폴더 모달 제어 ---
+    function openCreateFolderModal() {
+      document.getElementById("input-folder-name").value = "";
+      document.getElementById("createFolderModal").classList.remove("hidden");
+    }
+
+    function closeCreateFolderModal() {
+      document.getElementById("createFolderModal").classList.add("hidden");
+    }
+
+    function createFolder() {
+      const name = document.getElementById("input-folder-name").value.trim();
+      if (!name) {
+        showCustomAlert("경고", "만들고자 하는 묶음 이름을 입력하세요.", "warning");
+        return;
+      }
+      const id = "folder-" + Date.now();
+      appState.folders.push({
+        id: id,
+        name: name,
+        createdAt: Date.now()
+      });
+      saveData();
+      closeCreateFolderModal();
+      renderFolders();
+      showCustomAlert("생성 완료", `새 묶음 '${name}'이 생성되었습니다.`, "success");
+    }
+
+    // --- 폴더 상세 페이지 제어 ---
+    let selectedFolderId = null;
+    function openFolderDetail(folderId) {
+      selectedFolderId = folderId;
+      const folder = appState.folders.find(f => f.id === folderId);
+      if (!folder) return;
+
+      document.getElementById("detail-folder-name").innerText = folder.name;
+      
+      renderFolderDetailCards();
+      switchTab('folder-detail');
+
+      document.getElementById("btn-detail-flashcard").onclick = () => {
+        startStudyDirect(folderId, 'flashcard');
+      };
+      document.getElementById("btn-detail-writing").onclick = () => {
+        startStudyDirect(folderId, 'writing');
+      };
+    }
+
+    function renderFolderDetailCards() {
+      const listContainer = document.getElementById("detail-cards-grid");
+      listContainer.innerHTML = "";
+
+      const fCards = appState.cards.filter(c => c.folderId === selectedFolderId);
+      document.getElementById("detail-card-count").innerText = fCards.length;
+
+      if (fCards.length === 0) {
+        listContainer.innerHTML = `
+          <div class="col-span-full py-12 text-center text-stone-400 text-sm">
+            묶음에 소속된 한자가 없습니다. 사진촬영이나 수동 입력을 거쳐 등록해 보세요.
+          </div>
+        `;
+        return;
+      }
+
+      fCards.forEach(card => {
+        const cardEl = document.createElement("div");
+        cardEl.className = "bg-stone-50 border border-stone-200 p-4 rounded-xl flex flex-col justify-between items-center text-center relative shadow-sm hover:bg-stone-100/50 transition";
+        cardEl.innerHTML = `
+          <button onclick="toggleCardFavoriteDirect('${card.id}', event)" class="absolute top-2 right-2 transition">
+            <i data-lucide="star" class="w-4 h-4 ${card.favorite ? 'text-indigo-950 fill-indigo-950' : 'text-stone-300 hover:text-indigo-950'}"></i>
+          </button>
+          
+          <div class="hanja-text text-4xl text-stone-900 my-2">${card.hanja}</div>
+          <div class="text-xs text-stone-500 font-bold">${card.meaning}</div>
+          <div class="text-sm font-black text-indigo-950 mt-0.5">${card.sound}</div>
+          
+          <div class="mt-3 flex justify-between w-full text-[9px] text-stone-400 border-t border-stone-100 pt-2 font-bold">
+            <span>성공: ${card.correctCount}회</span>
+            <span>오답: ${card.incorrectCount}회</span>
+          </div>
+
+          <button onclick="deleteCard('${card.id}', event)" class="absolute bottom-2 right-2 text-stone-300 hover:text-indigo-950 transition" title="삭제">
+            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+          </button>
+        `;
+        listContainer.appendChild(cardEl);
+      });
+      lucide.createIcons();
+    }
+
+    function toggleCardFavoriteDirect(cardId, event) {
+      if (event) event.stopPropagation();
+      const card = appState.cards.find(c => c.id === cardId);
+      if (card) {
+        card.favorite = !card.favorite;
+        saveData();
+        renderFolderDetailCards();
+      }
+    }
+
+    // 즐겨찾기 폴더 해제 시 전체 삭제 방지용 백업 함수 및 로직 분리
+    function deleteCard(cardId, event) {
+      if (event) event.stopPropagation();
+      appState.cards = appState.cards.filter(c => c.id !== cardId);
+      saveData();
+      renderFolderDetailCards();
+    }
+
+    function deleteCurrentFolder() {
+      if (!selectedFolderId) return;
+      
+      const folder = appState.folders.find(f => f.id === selectedFolderId);
+      if (confirm(`'${folder.name}' 묶음과 그 안에 들어있는 모든 한자를 일괄 삭제하시겠습니까?`)) {
+        appState.folders = appState.folders.filter(f => f.id !== selectedFolderId);
+        appState.cards = appState.cards.filter(c => c.folderId !== selectedFolderId);
+        saveData();
+        switchTab('home');
+        showCustomAlert("삭제 완료", "해당 묶음이 삭제되었습니다.", "success");
+      }
+    }
+
+    // --- 즐겨찾기 탭 전용 렌더러 ---
+    function renderFavorites() {
+      const container = document.getElementById("favorite-cards-grid");
+      container.innerHTML = "";
+
+      const favs = appState.cards.filter(c => c.favorite);
+      if (favs.length === 0) {
+        container.innerHTML = `
+          <div class="col-span-full py-12 text-center text-stone-400 text-sm">
+            현재 즐겨찾기 보관소에 지정된 한자가 없습니다.<br>
+            중요한 한자는 카드 오른쪽 위 별 아이콘을 마크해 보관해 보세요.
+          </div>
+        `;
+        return;
+      }
+
+      favs.forEach(card => {
+        const cardEl = document.createElement("div");
+        cardEl.className = "bg-stone-50 border border-stone-200 p-4 rounded-xl flex flex-col justify-between items-center text-center relative shadow-sm";
+        cardEl.innerHTML = `
+          <button onclick="toggleFavoriteFromFavTab('${card.id}')" class="absolute top-2 right-2 text-indigo-950 transition">
+            <i data-lucide="star" class="w-4 h-4 fill-indigo-950"></i>
+          </button>
+          
+          <div class="hanja-text text-4xl text-stone-900 my-2">${card.hanja}</div>
+          <div class="text-xs text-stone-500 font-bold">${card.meaning}</div>
+          <div class="text-sm font-black text-indigo-950 mt-0.5">${card.sound}</div>
+        `;
+        container.appendChild(cardEl);
+      });
+      lucide.createIcons();
+    }
+
+    function toggleFavoriteFromFavTab(cardId) {
+      const card = appState.cards.find(c => c.id === cardId);
+      if (card) {
+        card.favorite = false;
+        saveData();
+        renderFavorites();
+      }
+    }
+
+    // --- 6. 기능 1: 한자 인식 제어 파트 ---
+    let currentMethod = 'ai';
+    function toggleRecognitionMethod(method) {
+      currentMethod = method;
+      const btnAi = document.getElementById("btn-method-ai");
+      const btnManual = document.getElementById("btn-method-manual");
+      
+      const containerAi = document.getElementById("method-ai-container");
+      const containerManual = document.getElementById("method-manual-container");
+
+      if (method === 'ai') {
+        btnAi.className = "flex-1 py-3 text-center border-b-2 border-indigo-950 font-black text-indigo-950";
+        btnManual.className = "flex-1 py-3 text-center text-stone-500 hover:text-indigo-950 font-bold";
+        containerAi.classList.remove("hidden");
+        containerManual.classList.add("hidden");
+      } else {
+        btnManual.className = "flex-1 py-3 text-center border-b-2 border-indigo-950 font-black text-indigo-950";
+        btnAi.className = "flex-1 py-3 text-center text-stone-500 hover:text-indigo-950 font-bold";
+        containerManual.classList.remove("hidden");
+        containerAi.classList.add("hidden");
+      }
+    }
+
+    function fillFolderDropdowns() {
+      const aiSelect = document.getElementById("ai-folder-select");
+      const manualSelect = document.getElementById("manual-folder-select");
+
+      const options = appState.folders.map(f => `<option value="${f.id}">${f.name}</option>`).join("");
+      aiSelect.innerHTML = options;
+      manualSelect.innerHTML = options;
+    }
+
+    let selectedImageBase64 = null;
+
+    function triggerFileInput() {
+      document.getElementById("file-input").click();
+    }
+
+    function handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        selectedImageBase64 = e.target.result;
+        document.getElementById("drop-zone-prompt").classList.add("hidden");
+        const previewImg = document.getElementById("image-preview");
+        previewImg.src = selectedImageBase64;
+        document.getElementById("image-preview-container").classList.remove("hidden");
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function cancelImageSelect(event) {
+      if (event) event.stopPropagation();
+      selectedImageBase64 = null;
+      document.getElementById("file-input").value = "";
+      document.getElementById("image-preview-container").classList.add("hidden");
+      document.getElementById("drop-zone-prompt").classList.remove("hidden");
+    }
+
+    async function analyzeHanjaImage() {
+      if (!appState.apiKey) {
+        showCustomAlert("API 키 필요", "이미지 정밀 해체를 시작하려면 Gemini API 키를 먼저 설정창에서 조달해 주세요.", "error");
+        openSettings();
+        return;
+      }
+
+      if (!selectedImageBase64) {
+        showCustomAlert("이미지 없음", "분석을 실행할 이미지 파일을 우선 첨부해 주세요.", "warning");
+        return;
+      }
+
+      let targetFolderId = document.getElementById("ai-folder-select").value;
+      const customFolderName = document.getElementById("ai-new-folder-name").value.trim();
+
+      if (customFolderName) {
+        targetFolderId = "folder-" + Date.now();
+        appState.folders.push({
+          id: targetFolderId,
+          name: customFolderName,
+          createdAt: Date.now()
+        });
+      }
+
+      document.getElementById("ai-processing-status").classList.remove("hidden");
+      document.getElementById("btn-analyze-image").disabled = true;
+
+      const base64Data = selectedImageBase64.split(",")[1];
+      const mimeType = selectedImageBase64.split(",")[0].split(":")[1].split(";")[0];
+
+      const systemInstruction = "너는 한문 및 한자 전문 튜터이자 OCR 분석기이다. 업로드된 이미지 속 한자들을 완벽히 인식하여, 한자의 '모양(hanja)', '소리(sound)', '뜻(meaning)'을 정확하게 구분해 내야 한다.";
+      const prompt = `이 사진에서 보이는 학습할 만한 대표 한자들을 추출하여 다음 Schema의 JSON 배열 구조로만 반환해줘. 그 외의 텍스트 설명은 절대로 출력하지 마. 
+      Schema 구조:
+      [
+        { "hanja": "한자글자(모양)", "sound": "음(소리 - 예: 온)", "meaning": "훈(뜻 - 예: 따뜻할)" }
+      ]`;
+
+      try {
+        const parsedResponse = await requestGeminiVision(base64Data, mimeType, prompt, systemInstruction);
+        
+        if (parsedResponse && parsedResponse.length > 0) {
+          parsedResponse.forEach(item => {
+            appState.cards.push({
+              id: "card-" + Math.random().toString(36).substr(2, 9),
+              folderId: targetFolderId,
+              hanja: item.hanja || "",
+              sound: item.sound || "",
+              meaning: item.meaning || "",
+              favorite: false,
+              incorrectCount: 0,
+              correctCount: 0
             });
+          });
+
+          saveData();
+          renderFolders();
+          displayAIResults(parsedResponse);
+          showCustomAlert("인식 및 배치 완료", `사진 속 한자 ${parsedResponse.length}개를 무사히 검출하고 묶음에 보관하였습니다.`, "success");
+        } else {
+          showCustomAlert("분해 실패", "이미지 가독성이 좋지 않아 인식에 실패했습니다. 더 밝고 선명한 구도에서 재촬영해 보세요.", "error");
         }
+      } catch (err) {
+        console.error(err);
+        showCustomAlert("에러 발생", "Gemini API 통신 중 응답 양식이나 타임아웃 오류가 발생했습니다.", "error");
+      } finally {
+        document.getElementById("ai-processing-status").classList.add("hidden");
+        document.getElementById("btn-analyze-image").disabled = false;
+        cancelImageSelect();
+        document.getElementById("ai-new-folder-name").value = "";
+      }
+    }
 
-        function renderChapter() {
-            if (chapters.length === 0) return;
-            const chapter = chapters[currentChapterIndex];
-            contentArea.innerText = chapter.content;
-            chapterIndicator.innerText = chapter.title;
-            chapterIndicator.classList.remove('hidden');
-            pageInfo.innerText = `${currentChapterIndex + 1} / ${chapters.length}`;
-            prevBtn.disabled = currentChapterIndex === 0;
-            nextBtn.disabled = currentChapterIndex === chapters.length - 1;
-            buildToc();
-            window.scrollTo({top: 0, behavior: 'instant'});
-            saveToDB({ chapters, currentIndex: currentChapterIndex });
-        }
-
-        function showViewer() {
-            placeholder.classList.add('hidden');
-            viewerContainer.classList.remove('hidden');
-            openTocBtn.classList.remove('hidden');
-            renderChapter();
-        }
-
-        function splitChapters(text) {
-            const lines = text.split('\n');
-            const result = [];
-            let currentTitle = "시작";
-            let currentBody = [];
-            const chapterPattern = /(\d+화|제\s*\d+\s*화)/;
-            lines.forEach((line) => {
-                const trimmed = line.trim();
-                if (chapterPattern.test(trimmed) && trimmed.length < 25) {
-                    if (currentBody.length > 0 || currentTitle !== "시작") {
-                        result.push({ title: currentTitle, content: currentBody.join('\n').trim() });
-                    }
-                    currentTitle = trimmed;
-                    currentBody = [];
-                } else { currentBody.push(line); }
-            });
-            result.push({ title: currentTitle, content: currentBody.join('\n').trim() });
-            return result;
-        }
-
-        function closeToc() {
-            tocPanel.classList.add('hidden-panel-right');
-            overlay.classList.add('hidden');
-        }
-
-        window.addEventListener('touchstart', (e) => { touchStartY = e.touches[0].pageY; }, { passive: true });
-        window.addEventListener('touchmove', (e) => {
-            if (chapters.length === 0) return;
-            const touchY = e.touches[0].pageY;
-            const pullDistance = touchY - touchStartY;
-            const isAtTop = window.scrollY <= 0;
-            const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 1;
-
-            if (isAtBottom && pullDistance < -THRESHOLD && currentChapterIndex < chapters.length - 1) {
-                scrollHint.innerText = "다음 회차로 넘어갑니다";
-                scrollHint.style.top = "auto";
-                scrollHint.style.bottom = "120px";
-                scrollHint.style.opacity = "1";
-            } else if (isAtTop && pullDistance > THRESHOLD && currentChapterIndex > 0) {
-                scrollHint.innerText = "이전 회차로 넘어갑니다";
-                scrollHint.style.bottom = "auto";
-                scrollHint.style.top = "120px";
-                scrollHint.style.opacity = "1";
-            } else { scrollHint.style.opacity = "0"; }
-        }, { passive: true });
-
-        window.addEventListener('touchend', (e) => {
-            const touchY = e.changedTouches[0].pageY;
-            const pullDistance = touchY - touchStartY;
-            const isAtTop = window.scrollY <= 0;
-            const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 1;
-
-            if (isAtBottom && pullDistance < -THRESHOLD && currentChapterIndex < chapters.length - 1) {
-                currentChapterIndex++; renderChapter();
-            } else if (isAtTop && pullDistance > THRESHOLD && currentChapterIndex > 0) {
-                currentChapterIndex--; renderChapter();
+    async function requestGeminiVision(base64Data, mimeType, promptText, systemPrompt, retryCount = 0) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${appState.apiKey}`;
+      
+      const payload = {
+        contents: [
+          {
+            parts: [
+              { text: promptText },
+              {
+                inlineData: {
+                  mimeType: mimeType,
+                  data: base64Data
+                }
+              }
+            ]
+          }
+        ],
+        systemInstruction: {
+          parts: [{ text: systemPrompt }]
+        },
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: "ARRAY",
+            items: {
+              type: "OBJECT",
+              properties: {
+                hanja: { type: "STRING" },
+                sound: { type: "STRING" },
+                meaning: { type: "STRING" }
+              },
+              required: ["hanja", "sound", "meaning"]
             }
-            scrollHint.style.opacity = "0";
+          }
+        }
+      };
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
         });
 
-        window.addEventListener('wheel', (e) => {
-            if (chapters.length === 0) return;
-            const isAtTop = window.scrollY <= 0;
-            const isAtBottom = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 1;
-            if (isAtBottom && e.deltaY > 150 && currentChapterIndex < chapters.length - 1) {
-                currentChapterIndex++; renderChapter();
-            } else if (isAtTop && e.deltaY < -150 && currentChapterIndex > 0) {
-                currentChapterIndex--; renderChapter();
-            }
+        if (!response.ok) {
+          throw new Error(`API Return Status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const rawJsonText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        return JSON.parse(rawJsonText);
+
+      } catch (error) {
+        if (retryCount < 5) {
+          const delay = Math.pow(2, retryCount) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+          return await requestGeminiVision(base64Data, mimeType, promptText, systemPrompt, retryCount + 1);
+        }
+        throw error;
+      }
+    }
+
+    function displayAIResults(cards) {
+      const resultsContainer = document.getElementById("ai-results-container");
+      const list = document.getElementById("ai-results-list");
+      list.innerHTML = "";
+
+      cards.forEach(c => {
+        const el = document.createElement("div");
+        el.className = "bg-stone-50 border border-stone-200 rounded-xl p-3 text-center";
+        el.innerHTML = `
+          <div class="hanja-text text-3xl text-stone-900">${c.hanja}</div>
+          <div class="text-xs text-stone-500 font-bold mt-1">${c.meaning}</div>
+          <div class="text-sm text-indigo-950 font-black">${c.sound}</div>
+        `;
+        list.appendChild(el);
+      });
+
+      resultsContainer.classList.remove("hidden");
+    }
+
+    function saveManualHanja() {
+      const fId = document.getElementById("manual-folder-select").value;
+      const hanja = document.getElementById("manual-hanja").value.trim();
+      const sound = document.getElementById("manual-sound").value.trim();
+      const meaning = document.getElementById("manual-meaning").value.trim();
+
+      if (!hanja || !sound || !meaning) {
+        showCustomAlert("입력 확인", "한자의 모양, 소리, 뜻을 모두 입력해 주셔야 카드가 성립됩니다.", "warning");
+        return;
+      }
+
+      appState.cards.push({
+        id: "card-" + Date.now(),
+        folderId: fId,
+        hanja: hanja,
+        sound: sound,
+        meaning: meaning,
+        favorite: false,
+        incorrectCount: 0,
+        correctCount: 0
+      });
+
+      saveData();
+      renderFolders();
+
+      document.getElementById("manual-hanja").value = "";
+      document.getElementById("manual-sound").value = "";
+      document.getElementById("manual-meaning").value = "";
+
+      showCustomAlert("등록 완료", `한자 '${hanja}'가 묶음에 무사히 추가되었습니다.`, "success");
+    }
+
+    // --- 7. 플래시카드 & 쓰기 통합 스터디 흐름 엔진 ---
+    let currentStudyType = null;
+    let selectedStudyFolders = [];
+    let studyDeck = [];
+    let currentDeckIndex = 0;
+
+    function startStudyDirect(folderId, studyType) {
+      currentStudyType = studyType;
+      selectedStudyFolders = [folderId];
+      setupAndStartStudy();
+    }
+
+    function startStudyPreparation(studyType) {
+      currentStudyType = studyType;
+      document.getElementById("prep-title").innerText = studyType === 'flashcard' ? '플래시카드 암기 - 대상 폴더 선택' : '한자 쓰기 - 대상 폴더 선택';
+      
+      const listContainer = document.getElementById("prep-folder-list");
+      listContainer.innerHTML = "";
+
+      if (appState.folders.length === 0) {
+        listContainer.innerHTML = `<div class="col-span-full py-6 text-center text-stone-400">학습 가능한 폴더가 존재하지 않습니다. 먼저 폴더를 설계해 주세요.</div>`;
+        document.getElementById("btn-start-study").disabled = true;
+        switchTab('preparation');
+        return;
+      }
+
+      appState.folders.forEach(f => {
+        const count = appState.cards.filter(c => c.folderId === f.id).length;
+        const div = document.createElement("label");
+        div.className = "flex items-center space-x-3 p-3 bg-stone-50 border border-stone-200 rounded-xl cursor-pointer hover:bg-stone-100/50 transition";
+        div.innerHTML = `
+          <input type="checkbox" name="prep-folders" value="${f.id}" onchange="updateSelectedFoldersSummary()" class="w-5 h-5 accent-indigo-950 rounded">
+          <div class="flex-grow">
+            <div class="font-bold text-stone-900">${f.name}</div>
+            <div class="text-xs text-stone-500 font-semibold">보유 한자: ${count}개</div>
+          </div>
+        `;
+        listContainer.appendChild(div);
+      });
+
+      updateSelectedFoldersSummary();
+      switchTab('preparation');
+    }
+
+    function updateSelectedFoldersSummary() {
+      const checkedBoxes = document.querySelectorAll('input[name="prep-folders"]:checked');
+      const count = checkedBoxes.length;
+      selectedStudyFolders = Array.from(checkedBoxes).map(cb => cb.value);
+
+      let totalCards = 0;
+      selectedStudyFolders.forEach(fid => {
+        totalCards += appState.cards.filter(c => c.folderId === fid).length;
+      });
+
+      const summary = document.getElementById("prep-selected-summary");
+      summary.innerText = `선택한 폴더: ${count}개 (총 검토할 카드: ${totalCards}개)`;
+
+      const startBtn = document.getElementById("btn-start-study");
+      startBtn.disabled = totalCards === 0;
+    }
+
+    function executeStudyStart() {
+      setupAndStartStudy();
+    }
+
+    function setupAndStartStudy() {
+      studyDeck = [];
+      selectedStudyFolders.forEach(fid => {
+        const folderCards = appState.cards.filter(c => c.folderId === fid);
+        folderCards.forEach(c => {
+          studyDeck.push({ ...c });
+        });
+      });
+
+      shuffleArray(studyDeck);
+      currentDeckIndex = 0;
+
+      if (studyDeck.length === 0) {
+        showCustomAlert("오류", "학습 덱에 한자가 한 장도 발견되지 않았습니다.", "error");
+        return;
+      }
+
+      if (currentStudyType === 'flashcard') {
+        initFlashcardGame();
+        switchTab('flashcard');
+      } else {
+        switchTab('writing');
+        // switchTab('writing') 내부에서 캔버스를 강제 리사이징하므로 필기 안 되는 버그 완벽 예방
+        setTimeout(() => {
+          initWritingGame();
+        }, 60);
+      }
+    }
+
+    function shuffleArray(array) {
+      for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+      }
+    }
+
+    // --- 8. 기능 2: 플래시카드 실행 로직 ---
+    let fcAnswerRevealed = false;
+
+    function initFlashcardGame() {
+      fcAnswerRevealed = false;
+      document.getElementById("fc-answer-container").classList.add("opacity-0");
+      document.getElementById("fc-hint-button").classList.remove("hidden");
+      
+      const currentCard = studyDeck[currentDeckIndex];
+      document.getElementById("fc-remaining-count").innerText = studyDeck.length - currentDeckIndex;
+      document.getElementById("fc-progress-label").innerText = `${currentDeckIndex + 1}/${studyDeck.length}`;
+      document.getElementById("fc-hanja").innerText = currentCard.hanja;
+      document.getElementById("fc-meaning").innerText = `뜻: ${currentCard.meaning}`;
+      document.getElementById("fc-sound").innerText = currentCard.sound;
+
+      const realCard = appState.cards.find(c => c.id === currentCard.id);
+      updateFavoriteIcon(realCard ? realCard.favorite : false);
+
+      const swipeCardEl = document.getElementById("swipe-card-element");
+      swipeCardEl.style.transform = "translateX(0px) translateY(0px) rotate(0deg)";
+      swipeCardEl.style.opacity = "1";
+    }
+
+    function revealFlashcardAnswer() {
+      fcAnswerRevealed = true;
+      document.getElementById("fc-answer-container").classList.remove("opacity-0");
+      document.getElementById("fc-hint-button").classList.add("hidden");
+    }
+
+    function toggleCurrentCardFavorite(event) {
+      if (event) event.stopPropagation();
+      const currentCard = studyDeck[currentDeckIndex];
+      const realCard = appState.cards.find(c => c.id === currentCard.id);
+      if (realCard) {
+        realCard.favorite = !realCard.favorite;
+        saveData();
+        updateFavoriteIcon(realCard.favorite);
+      }
+    }
+
+    function updateFavoriteIcon(isFav) {
+      const icon = document.getElementById("fc-fav-icon");
+      if (isFav) {
+        icon.classList.remove("text-stone-300");
+        icon.classList.add("text-indigo-950", "fill-indigo-950");
+      } else {
+        icon.classList.remove("text-indigo-950", "fill-indigo-950");
+        icon.classList.add("text-stone-300");
+      }
+    }
+
+    function initSwipeFeatures() {
+      const card = document.getElementById("swipe-card-element");
+      let startX = 0;
+      let startY = 0;
+      let isDragging = false;
+
+      card.addEventListener("mousedown", dragStart);
+      card.addEventListener("touchstart", dragStart);
+
+      document.addEventListener("mousemove", dragMove);
+      document.addEventListener("touchmove", dragMove);
+
+      document.addEventListener("mouseup", dragEnd);
+      document.addEventListener("touchend", dragEnd);
+
+      function dragStart(e) {
+        if (e.target.closest('button')) return;
+        isDragging = true;
+        startX = e.type === "touchstart" ? e.touches[0].clientX : e.clientX;
+        startY = e.type === "touchstart" ? e.touches[0].clientY : e.clientY;
+        card.style.transition = "none";
+      }
+
+      function dragMove(e) {
+        if (!isDragging) return;
+        const currentX = e.type === "touchmove" ? e.touches[0].clientX : e.clientX;
+        const currentY = e.type === "touchmove" ? e.touches[0].clientY : e.clientY;
+
+        const diffX = currentX - startX;
+        const diffY = currentY - startY;
+        const rotate = diffX * 0.08;
+
+        card.style.transform = `translateX(${diffX}px) translateY(${diffY}px) rotate(${rotate}deg)`;
+
+        if (Math.abs(diffX) > 50) {
+          card.style.opacity = "0.85";
+        }
+      }
+
+      function dragEnd(e) {
+        if (!isDragging) return;
+        isDragging = false;
+        card.style.transition = "transform 0.3s ease, opacity 0.3s ease";
+
+        const transformStr = card.style.transform;
+        const match = transformStr.match(/translateX\(([-?\d.]+)px\)/);
+        const currentX = match ? parseFloat(match[1]) : 0;
+
+        if (currentX > 120) {
+          handleStudySwipe("right");
+        } else if (currentX < -120) {
+          handleStudySwipe("left");
+        } else {
+          card.style.transform = "translateX(0px) translateY(0px) rotate(0deg)";
+          card.style.opacity = "1";
+        }
+      }
+    }
+
+    function handleStudySwipe(direction) {
+      if (studyDeck.length === 0) return;
+      
+      const currentCard = studyDeck[currentDeckIndex];
+      const realCard = appState.cards.find(c => c.id === currentCard.id);
+      const cardEl = document.getElementById("swipe-card-element");
+      
+      if (direction === "right") {
+        if (realCard) realCard.correctCount = (realCard.correctCount || 0) + 1;
+        cardEl.style.transform = "translateX(400px) rotate(25deg)";
+        cardEl.style.opacity = "0";
+        studyDeck.splice(currentDeckIndex, 1);
+      } else {
+        if (realCard) realCard.incorrectCount = (realCard.incorrectCount || 0) + 1;
+        cardEl.style.transform = "translateX(-400px) rotate(-25deg)";
+        cardEl.style.opacity = "0";
+
+        const wrongItem = studyDeck.splice(currentDeckIndex, 1)[0];
+        studyDeck.push(wrongItem);
+      }
+
+      saveData();
+
+      setTimeout(() => {
+        if (studyDeck.length === 0) {
+          showCustomAlert("학습 완료", "축하합니다! 선택한 카드를 완벽하게 마스터하셨습니다.", "success");
+          switchTab('home');
+        } else {
+          if (currentDeckIndex >= studyDeck.length) {
+            currentDeckIndex = 0;
+          }
+          initFlashcardGame();
+        }
+      }, 250);
+    }
+
+    // --- 9. 기능 3: 한자 쓰기 연습 및 채점 캔버스 모듈 ---
+    let writingMode = 'practice';
+    let canvas, ctx;
+    let isDrawingOnCanvas = false;
+
+    function initWritingCanvas() {
+      canvas = document.getElementById("writing-canvas");
+      ctx = canvas.getContext("2d");
+
+      // 데스크톱 마우스와 모바일 터치를 완벽히 통합 흡수하는 Pointer Events 탑재로 오작동 종식
+      canvas.addEventListener("pointerdown", startDrawing);
+      canvas.addEventListener("pointermove", drawLine);
+      canvas.addEventListener("pointerup", stopDrawing);
+      canvas.addEventListener("pointercancel", stopDrawing);
+
+      resizeCanvas();
+      window.addEventListener("resize", resizeCanvas);
+    }
+
+    function resizeCanvas() {
+      const rect = canvas.parentElement.getBoundingClientRect();
+      // 0px × 0px 비인식 대참사를 극방지하기 위해 실 측정값이 0보다 클 때만 정밀 반영
+      if (rect.width > 0 && rect.height > 0) {
+        canvas.width = rect.width;
+        canvas.height = rect.height;
+        clearCanvas();
+      }
+    }
+
+    function clearCanvas() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      ctx.strokeStyle = "#e2e8f0";
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([6, 6]);
+      
+      ctx.beginPath();
+      ctx.moveTo(canvas.width / 2, 0);
+      ctx.lineTo(canvas.width / 2, canvas.height);
+      ctx.moveTo(0, canvas.height / 2);
+      ctx.lineTo(canvas.width, canvas.height / 2);
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+      ctx.strokeStyle = "#1e1b4b"; // 깊은 벼루 먹빛 (Indigo-950)
+      ctx.lineWidth = 4.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+    }
+
+    function startDrawing(e) {
+      canvas.setPointerCapture(e.pointerId);
+      isDrawingOnCanvas = true;
+      ctx.beginPath();
+      const rect = canvas.getBoundingClientRect();
+      ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+    }
+
+    function drawLine(e) {
+      if (!isDrawingOnCanvas) return;
+      const rect = canvas.getBoundingClientRect();
+      ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+      ctx.stroke();
+    }
+
+    function stopDrawing(e) {
+      if (isDrawingOnCanvas) {
+        canvas.releasePointerCapture(e.pointerId);
+        isDrawingOnCanvas = false;
+      }
+    }
+
+    function toggleWritingMode(mode) {
+      writingMode = mode;
+      const btnPractice = document.getElementById("btn-mode-practice");
+      const btnTest = document.getElementById("btn-mode-test");
+
+      if (mode === 'practice') {
+        btnPractice.className = "px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 bg-white text-indigo-950 shadow";
+        btnTest.className = "px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 text-stone-500 hover:text-indigo-950";
+      } else {
+        btnTest.className = "px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 bg-white text-indigo-950 shadow";
+        btnPractice.className = "px-3.5 py-1.5 text-xs font-bold rounded-lg transition-all duration-200 text-stone-500 hover:text-indigo-950";
+      }
+
+      initWritingGame();
+    }
+
+    function initWritingGame() {
+      const currentCard = studyDeck[currentDeckIndex];
+      document.getElementById("wr-remaining-count").innerText = studyDeck.length - currentDeckIndex;
+      
+      document.getElementById("wr-prompt-meaning").innerText = currentCard.meaning;
+      document.getElementById("wr-prompt-sound").innerText = currentCard.sound;
+
+      const guideText = document.getElementById("canvas-guide-text");
+      
+      clearCanvas();
+
+      if (writingMode === 'practice') {
+        // 연습모드: 요청사항인 반투명도 0.5(50%)를 명확히 고정 적용하여 흐릿함 타파!
+        guideText.innerText = currentCard.hanja;
+        guideText.style.opacity = "0.5";
+        
+        document.getElementById("btn-wr-submit").classList.add("hidden");
+        document.getElementById("wr-grade-zone").classList.remove("hidden");
+      } else {
+        // 테스트모드: 가이드 글자 완전 소멸 처리
+        guideText.innerText = "";
+        guideText.style.opacity = "0";
+
+        document.getElementById("btn-wr-submit").classList.remove("hidden");
+        document.getElementById("wr-grade-zone").classList.add("hidden");
+      }
+    }
+
+    function revealWritingAnswer() {
+      const currentCard = studyDeck[currentDeckIndex];
+      const guideText = document.getElementById("canvas-guide-text");
+
+      // 자가 채점을 위해 정답을 0.5 투명도의 오버레이 형태로 표출
+      guideText.innerText = currentCard.hanja;
+      guideText.style.opacity = "0.5";
+
+      document.getElementById("btn-wr-submit").classList.add("hidden");
+      document.getElementById("wr-grade-zone").classList.remove("hidden");
+    }
+
+    function handleWritingSwipe(direction) {
+      if (studyDeck.length === 0) return;
+      
+      const currentCard = studyDeck[currentDeckIndex];
+      const realCard = appState.cards.find(c => c.id === currentCard.id);
+
+      if (direction === "right") {
+        if (realCard) realCard.correctCount = (realCard.correctCount || 0) + 1;
+        studyDeck.splice(currentDeckIndex, 1);
+      } else {
+        if (realCard) realCard.incorrectCount = (realCard.incorrectCount || 0) + 1;
+        const wrongItem = studyDeck.splice(currentDeckIndex, 1)[0];
+        studyDeck.push(wrongItem);
+      }
+
+      saveData();
+
+      if (studyDeck.length === 0) {
+        showCustomAlert("완료", "축하합니다! 선택한 한자 쓰기 테스트를 완독하였습니다.", "success");
+        switchTab('home');
+      } else {
+        if (currentDeckIndex >= studyDeck.length) {
+          currentDeckIndex = 0;
+        }
+        initWritingGame();
+      }
+    }
+
+    // --- 10. 기능 4: AI 학습 분석 엔진 (Gemini API 호출) ---
+    async function runAIAnalysis() {
+      if (!appState.apiKey) {
+        showCustomAlert("API 키 누락", "지능형 오답 스토리 진단을 위해 API 키가 등록되어야 작동합니다.", "warning");
+        openSettings();
+        return;
+      }
+
+      const sortedByErrors = [...appState.cards]
+        .filter(c => c.incorrectCount > 0)
+        .sort((a, b) => b.incorrectCount - a.incorrectCount);
+
+      if (sortedByErrors.length === 0) {
+        showCustomAlert("데이터 부족", "아직 오답 누적 이력이 존재하지 않습니다. 먼저 암기나 쓰기 테스트를 진행해 주세요.", "info");
+        return;
+      }
+
+      document.getElementById("ai-analysis-loading").classList.remove("hidden");
+      document.getElementById("ai-analysis-result").classList.add("hidden");
+
+      const poorHanjaList = sortedByErrors.slice(0, 8).map(c => `[한자:${c.hanja}, 음/뜻:${c.sound}(${c.meaning}), 누적 틀린횟수:${c.incorrectCount}회]`).join("\n");
+
+      const systemPrompt = "너는 세계 최고의 한문 교육공학 전문가이자 서당 훈장님이다. 학생의 오답 데이터를 기반으로 친절하면서도 정곡을 찌르는 맞춤 암기 조언을 제공한다.";
+      const userPrompt = `다음은 학생이 한문 시험을 준비하면서 자주 틀렸던 최약점 한자 목록이다:\n\n${poorHanjaList}\n\n이 한자들의 뜻과 부수 조합을 참고하여, 이 한자들을 절대로 잊어버리지 않고 흥미롭게 연상하여 암기할 수 있는 일일 한자 암기 스토리텔링 및 공부법 피드백을 600자 내외의 품격있는 한국어로 작성해줘.`;
+
+      try {
+        const feedback = await requestGeminiText(userPrompt, systemPrompt);
+        
+        document.getElementById("ai-feedback-text").innerText = feedback || "정상적으로 리포트를 파싱하지 못했습니다. 다시 호출해 보세요.";
+        renderWeakCardsList(sortedByErrors.slice(0, 4));
+
+        document.getElementById("ai-analysis-result").classList.remove("hidden");
+      } catch (err) {
+        console.error(err);
+        showCustomAlert("분석 실패", "Gemini 모델 응답 수신 중 오류가 발생했습니다.", "error");
+      } finally {
+        document.getElementById("ai-analysis-loading").classList.add("hidden");
+      }
+    }
+
+    async function requestGeminiText(promptText, systemPrompt, retryCount = 0) {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${appState.apiKey}`;
+      const payload = {
+        contents: [{ parts: [{ text: promptText }] }],
+        systemInstruction: { parts: [{ text: systemPrompt }] }
+      };
+
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
         });
 
-        fileInput.addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                chapters = splitChapters(event.target.result);
-                currentChapterIndex = 0;
-                showViewer();
-            };
-            reader.readAsText(file);
-        });
+        if (!response.ok) {
+          throw new Error("HTTP " + response.status);
+        }
 
-        touchCenter.addEventListener('click', () => { settings.uiVisible = !settings.uiVisible; applySettings(); });
-        prevBtn.addEventListener('click', () => { if (currentChapterIndex > 0) { currentChapterIndex--; renderChapter(); } });
-        nextBtn.addEventListener('click', () => { if (currentChapterIndex < chapters.length - 1) { currentChapterIndex++; renderChapter(); } });
-        
-        toggleBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            settingsPanel.classList.remove('hidden-panel-bottom');
-            overlay.classList.remove('hidden');
-        });
-        
-        closeBtn.addEventListener('click', () => {
-            settingsPanel.classList.add('hidden-panel-bottom');
-            overlay.classList.add('hidden');
-        });
-        
-        openTocBtn.addEventListener('click', () => {
-            tocPanel.classList.remove('hidden-panel-right');
-            overlay.classList.remove('hidden');
-        });
-        
-        closeTocBtn.addEventListener('click', closeToc);
-        
-        overlay.addEventListener('click', () => {
-            closeToc();
-            settingsPanel.classList.add('hidden-panel-bottom');
-            overlay.classList.add('hidden');
-        });
+        const data = await response.json();
+        return data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-        document.getElementById('btn-light').addEventListener('click', () => { settings.theme = 'light'; applySettings(); });
-        document.getElementById('btn-dark').addEventListener('click', () => { settings.theme = 'dark'; applySettings(); });
-        fontFamilySelect.addEventListener('change', (e) => { settings.fontFamily = e.target.value; applySettings(); });
-        fontSizeSlider.addEventListener('input', (e) => { settings.fontSize = e.target.value; applySettings(); });
-        
-        applySettings();
-    </script>
+      } catch (err) {
+        if (retryCount < 5) {
+          const delay = Math.pow(2, retryCount) * 1000;
+          await new Promise(r => setTimeout(r, delay));
+          return await requestGeminiText(promptText, systemPrompt, retryCount + 1);
+        }
+        throw err;
+      }
+    }
+
+    function renderWeakCardsList(cards) {
+      const list = document.getElementById("ai-weak-cards-list");
+      list.innerHTML = "";
+
+      cards.forEach(card => {
+        const div = document.createElement("div");
+        div.className = "bg-white p-3.5 border-l-4 border-indigo-950 rounded-r-xl flex justify-between items-center shadow-sm border border-stone-200 border-l-0";
+        div.innerHTML = `
+          <div>
+            <div class="hanja-text text-2xl text-stone-900">${card.hanja}</div>
+            <div class="text-xs text-stone-500 font-bold mt-0.5">${card.meaning} | <span class="text-indigo-950 font-black">${card.sound}</span></div>
+          </div>
+          <div class="text-right">
+            <span class="text-xs bg-indigo-50 text-indigo-950 border border-indigo-200 px-2.5 py-1 rounded-full font-bold">오답 ${card.incorrectCount}회</span>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    // --- 11. 학습 중간 탈출 보조 시스템 ---
+    function confirmExitStudy() {
+      document.getElementById("studyExitConfirmModal").classList.remove("hidden");
+    }
+
+    function closeExitConfirm() {
+      document.getElementById("studyExitConfirmModal").classList.add("hidden");
+    }
+
+    // 학습 종료 시 안전 퇴출
+    function exitStudy() {
+      closeExitConfirm();
+      switchTab('home');
+    }
+
+  </script>
 </body>
 </html>
-
-```
